@@ -9,18 +9,31 @@ From: KPNO/NOIRLab/NSF/AURAAcknowledgment:PI: M.T. Patterson (New Mexico State U
 <img src="./ANN 106 Logo.png">
 
 
-# **A**rtificial **N**eural **N**etworks Framework for Visual Programming -106
+# **A**rtificial **N**eural **N**etworks Framework -106
 A framework for artificial neuro networks for educational purposes.
 
-With a visual modular system to build your AI:
-- GUI / visual programming with nodes
-- Export as python code
-- NN training
-- NN inferencing
-- Visual Programmed NN exporting und importing
-- tensorflow or pytorch for training/inferencing and export/import
-- Famous NN as blueprint?
-- Dataimport -> Preparation?
+
+
+Features:
+- Notebooks with Neural Networks
+- Framework to represent NNs
+  - Build NN
+  - Export as PyTorch or Tensorflow (or own Framework?) Code
+  - Training + Inferencing
+  - Export/Import ANN Models
+  - Data Import + Preparation?
+  - Draw Architecture -> print + render?
+  - Print statistics (number of calculation, number of weights, ...)
+- CMD NN Builder?
+  - Commands like "build nn -n cnn", "change struct", "add linear layer", "train -f pytorch"
+  - Like anaconda environments -> one environment is like one NN
+
+
+
+### Contents
+
+- [Basic Perceptron](./src/test-notebooks/Simple-Perceptron.ipynb)
+
 
 
 
