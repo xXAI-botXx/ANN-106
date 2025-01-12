@@ -2,8 +2,15 @@
 
 import numpy as np
 
+def get_total_loss(loss_dict):
+    """
+    Changes a dict of losses to a total loss.
+    """
+    return sum([value for value in loss_dict.values()])
+
 def sum_error(y, y_):
     return np.sum(y - y_)
+
 
 def sum_absolute_error(y, y_):
     return np.sum( np.abs(y - y_) )
