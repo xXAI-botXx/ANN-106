@@ -3,12 +3,12 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 from  sklearn.utils.validation import check_X_y, check_is_fitted
 from sklearn.utils.multiclass import unique_labels
 
-from ..base import ArtificialNeuralNetwork as Base_ANN
+from ..base import ArtificialNeuralNetwork as BaseANN
 
 
 class ArtificialNeuralNetwork(BaseANN, BaseEstimator, ClassifierMixin):
     def __init__(self):
-       # Base_ANN.__init__()
+       # BaseANN.__init__()
        super().__init__() 
 
     def fit(self, X, y, epochs, batch_size=1, parallel_computing=True, shuffle_data=True):

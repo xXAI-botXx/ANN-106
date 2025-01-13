@@ -14,16 +14,16 @@ Features
 
 Planned Features
 ----------------
-
-To Dos:
 - Add backward -> learning
 - Add parallel processing (of batches)
     - Parallel(n_jobs=-1)(delayed(compute_square)(num) for num in numbers
 - Add more Document Strings -> see: https://github.com/xXAI-botXx/Project-Helper/blob/main/guides/Sphinx_Helper.md#How-you-should-code
 - Add GPU calculation
+- Add validation data during training
 - Add Dataloader (?)
 - Add more networks -> CNN, ...
 
+Author: Tobia Ippolito
 """
 
 #############################
@@ -59,11 +59,13 @@ def get_cur_time_str():
     now = datetime.now()
     return f"{now.day}.{now.month}.{now.year} {now.hour}:{now.minute}:{now.second}"
 
-def moving_average_sliding_window(data:list, window_size):
+def moving_average_sliding_window(input_data:list, window_size):
     """
     Smooths a list moving a window over the data and applying the average on the window.
     """
-    data = np.array(data)
+    data = np.array(input_data)
+    if data.shape == None:
+        data = np.array([input_data])
     windows = np.lib.stride_tricks.sliding_window_view(data, window_size)
     return np.mean(windows, axis=1)
 
@@ -87,28 +89,19 @@ def log(file_path, content, reset_logs=False, reset_output=False,
     True, it will create a new log file or clear the existing one. The function 
     also offers an option to print the content to the console.
 
-    Parameters
-    ----------
-    file_path : str or None
-        The path to the log file. If None, the function does nothing.
-    content : str
-        The content to be logged. This will be appended to the file.
-    reset_logs : bool
-        If True, the log file will be cleared before writing the new content. Default is False.
-    reset_output : bool
-        If True, the output stream (printed content) gets deleted/cleared.
-    should_print : bool
-        If True, the content will also be printed to the console. Default is True.
-    name : str or None
-        Name of the logfile. Else the name of the model.
-
-    Returns
-    -------
-    None
-
-    Example
-    -------
-    >>> log("logs/my_log.txt", "This is a log entry.")
+    :param file_path: The path to the log file. If None, the function does nothing.
+    :type file_path: str or None
+    :param content: The content to be logged. This will be appended to the file.
+    :type content: str
+    :param reset_logs: If True, the log file will be cleared before writing the new content. Default is False.
+    :type reset_logs:  bool
+        
+    :param reset_output: If True, the output stream (printed content) gets deleted/cleared.
+    :type reset_output: bool
+    :param should_print: If True, the content will also be printed to the console. Default is True.
+    :type should_print: bool
+    :param name: Name of the logfile. Else the name of the model.
+    :type name: str or None
     """
     if file_path is None:
         return
@@ -181,30 +174,24 @@ def update_output(cur_epoch, cur_step, max_steps,
     total loss, and specific loss metrics. It also logs the output to a
     specified log file.
 
-    Parameters
-    ----------
-    cur_epoch : int
-        Current epoch number.
-    cur_step : int
-        Current step number.
-    max_steps : int
-        Total number of steps for the training.
-    data_size : int
-        Total size of the training dataset.
-    eta_str : str
-        Estimated time of arrival as a string.
-    total_loss : float
-        Total loss for the current step.
-    losses : dict
-        Dictionary of specific losses to be displayed.
-    batch_size : int
-        Size of the batch used in training.
-    log_path : str
-        Path to the log file where output should be written.
-
-    Returns
-    -------
-    None
+    :param cur_epoch: Current epoch number.
+    :type cur_epoch: int
+    :param cur_step: Current step number.
+    :type cur_step: int
+    :param max_steps: Total number of steps for the training.s
+    :type max_steps: int
+    :param data_size: Total size of the training dataset.
+    :type data_size: int
+    :param eta_str: Estimated time of arrival as a string.
+    :type eta_str: str
+    :param total_loss: Total loss for the current step.
+    :type total_loss: float
+    :param losses: Dictionary of specific losses to be displayed.
+    :type losses: dict
+    :param batch_size: Size of the batch used in training.
+    :type batch_size: int
+    :param log_path: Path to the log file where output should be written.
+    :type log_path: str
     """
     now = datetime.now()
     output = f"Training - {now.hour:02}:{now.minute:02} {now.day:02}.{now.month:02}.{now.year:04}"
@@ -225,10 +212,9 @@ def update_output(cur_epoch, cur_step, max_steps,
 
     print_output = f"\n\n{'-'*32}\n{output}\n{detail_output}\n{percentage_output}\n"
 
-
-    # print new output
     clear_printing()
-
+    
+    # print new output
     log(log_path, print_output, name=name)
 
 
@@ -250,14 +236,12 @@ class Layer():
         """
         Initializes a single layer in the neural network.
 
-        Parameters
-        ----------
-        input_size : int
-            Number of input neurons to the layer.
-        output_size : int
-            Number of output neurons from the layer.
-        activation_func : callable
-            Activation function for the layer.
+        :param input_size: Number of input neurons to the layer.
+        :type input_size: int
+        :param output_size: Number of output neurons from the layer.
+        :type output_size: int
+        :param activation_func: Activation function for the layer.
+        :type activation_func: callable or None
         """
         self.weights = np.random.uniform(-1, 1, (output_size, input_size))
         self.bias = np.random.uniform(-1, 1, (output_size,))
@@ -267,15 +251,11 @@ class Layer():
         """
         Forward pass through the layer.
 
-        Parameters
-        ----------
-        X : np.array
-            Input data for the layer.
+        :param X: Input data for the layer.
+        :type X: np.array
 
-        Returns
-        -------
-        np.array
-            Output of the layer after applying the activation function.
+        :return: Output of the layer after applying the activation function.
+        :rtype: np.array
         """
         z = np.dot(self.weights, X) + self.bias
         return self.activation_func(z)
@@ -308,15 +288,11 @@ class ArtificialNeuralNetwork():
         """
         Forward pass through the entire network.
 
-        Parameters
-        ----------
-        X : np.array
-            Input data for the network.
+        :param X: Input data for the network.
+        :type X: np.array
 
-        Returns
-        -------
-        np.array
-            Final output of the network.
+        :return: Final output of the network.
+        :rtype: np.array
         """
         output = X
         for layer in self.layers:
@@ -331,39 +307,34 @@ class ArtificialNeuralNetwork():
         """
         Trains the artificial neural network (ANN) on the given data.
 
-        Parameters
-        ----------
-        X : np.array
-            Array with multiple datapoints (features).
-        y : np.array
-            Array with ground truth labels (targets).
-        epochs : int
-            Amount of runs through the whole data.
-        batch_size : int
-            Group size of data, forwarding together before adjusting the weights.
-        print_ever_x_steps : int
-            How often should the informations be logged and printed? Every X steps they will be printed and logged.
-        save_model_every_x_epochs : int
-            How often should the model be saved? Every X epochs it will be saved.
-        log_path : str
-            Folder where the logs should be saved.
-        model_save_path : str
-            Folder where the model should save to.
-        name : str or None
-            Name of the model / training. Decides the name of the logs and the model saving name. 
-            If None, the standard model name will be used.
+        :param X: Array with multiple datapoints (features).
+        :type X: np.array
+        :param y: Array with ground truth labels (targets).
+        :type y: np.array
+        :param epochs: Amount of runs through the whole data.
+        :type epochs: int
+        :param batch_size: Group size of data, forwarding together before adjusting the weights.
+        :type batch_size: int
+        :param print_ever_x_steps: How often should the informations be logged and printed? Every X steps they will be printed and logged.
+        :type print_ever_x_steps: int
+        :param save_model_every_x_epochs: How often should the model be saved? Every X epochs it will be saved.
+        :type save_model_every_x_epochs: int
+        :param log_path: Folder where the logs should be saved.
+        :type log_path: str
+        :param model_save_path: Folder where the model should save to.
+        :type model_save_path: str
+        :param name: Name of the model / training. Decides the name of the logs and the model saving name. If None, the standard model name will be used.
+        :type name: str
 
-        Returns
-        -------
-        ArtificialNeuralNetwork
-            Updates ANN Model internally and also returns the model, for connected calls
+        :return: Updates ANN Model internally and also returns the model, for connected calls. 
+        :rtype: ArtificialNeuralNetwork 
         """
 
         # Init
         last_time = time.time()
         times = []
         losses = dict()
-        all_losses = []
+        all_losses = dict()
         n_samples = X.shape[0]
         all_iterations = n_samples//batch_size
         max_steps = epochs * all_iterations
@@ -404,7 +375,11 @@ class ArtificialNeuralNetwork():
                         y_ = self.forward(cur_X)
                         loss_dict = self.loss_function(cur_y, y_)    # loss
 
-                        all_losses += [loss_dict]
+                        for cur_loss_name, cur_loss_value in loss_dict.items():
+                            if cur_loss_name in all_losses.keys():
+                                all_losses[cur_loss_name] += [float(cur_loss_value)]
+                            else:
+                                all_losses[cur_loss_name] = [float(cur_loss_value)]
 
                         # how to customize prediction_elments
                         prediction_elments = []
@@ -465,19 +440,12 @@ class ArtificialNeuralNetwork():
         """
         Adds a new layer to the neural network.
 
-        Parameters
-        ----------
-        input_size : int
-            Number of input neurons to the layer.
-        output_size : int
-            Number of output neurons from the layer.
-        activation_func : callable
-            Activation function for the layer.
-
-        Returns
-        -------
-        None
-            Adds the new layer internally to the list.
+        :param input_size: Number of input neurons to the layer.
+        :type input_size: int
+        :param output_size: Number of output neurons from the layer.
+        :type output_size: int
+        :param activation_func: Activation function for the layer.
+        :type activation_func: callable or None
         """
         layer = Layer(input_size, output_size, activation_func)
         self.layers += [layer]
@@ -486,15 +454,13 @@ class ArtificialNeuralNetwork():
         """
         Saves the current neural network to a file using pickle.
 
-        Parameters
-        ----------
-        save_path : str
-            The file path where the model should be saved.
+        :param save_path: The file path where the model should be saved.
+        :type save_path: str
+        :param name: Name of the model.
+        :type name: str or None
 
-        Returns
-        -------
-        str
-            The path, where the model got saved.
+        :return: The path, where the model got saved.
+        :rtype: str
         """
         if name:
             name = name
@@ -521,15 +487,11 @@ class ArtificialNeuralNetwork():
         """
         Loads a neural network from a file using pickle.
 
-        Parameters
-        ----------
-        save_path : str
-            The file path from which the model should be loaded.
-
-        Returns
-        -------
-        ArtificialNeuralNetwork
-            The loaded neural network instance.
+        :param save_path: The file path from which the model should be loaded.
+        :type save_path: str
+            
+        :return: The loaded neural network instance.
+        :rtype: ArtificialNeuralNetwork
         """
         try:
             with open(save_path, 'rb') as file:
@@ -543,21 +505,14 @@ class ArtificialNeuralNetwork():
         """
         Plots the loss/error of the latest training.
 
-        Parameters
-        ----------
-        width :  int
-            Width of the plot in inch.
-        height : int
-            Height of the plot in inch.
-        smoothing_size : int ( >= 1 and <= total steps)
-            Window size for moving average, to smooth the plot.
-        should_show : Boolean
-            Defines whether to show the plot or not.
-
-        Returns
-        -------
-        None
-            Creates the plot inside and does not return something.
+        :param width: Width of the plot in inch.
+        :type width: int
+        :param height: Height of the plot in inch.
+        :type height: int
+        :param smoothing_size: Window size for moving average, to smooth the plot. 
+        :type smoothing_size: int ( >= 1 and <= total steps)
+        :param should_show: Defines whether to show the plot or not.
+        :type should_show: bool
         """
         end_times = self.train_history["end-time"]
         if len(end_times) <= 0:
@@ -566,15 +521,22 @@ class ArtificialNeuralNetwork():
         latest_index = parsed_end_times.index(max(parsed_end_times))
 
         loss = self.train_history["all-errors"][latest_index]
-        loss = sum([np.mean(np.array(loss[k])) for k in loss.keys()])
+        for key, values in loss.items():
+            indexes = len(values)
+            break
+        total_loss = [0]*indexes
+        for key, values in loss.items():
+            for i, value in enumerate(values):
+                total_loss[i] += value
 
-        loss = moving_average_sliding_window(loss, window_size=smoothing_size)
+        if smoothing_size > 1:
+            total_loss = moving_average_sliding_window(total_loss, window_size=smoothing_size)
 
         fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(width, height))
-        ax.plot(np.arange(0, len(all_errors)), all_errors)
+        ax.plot(np.arange(0, len(total_loss)), total_loss)
         ax.set_xlabel("Time Iterations")
-        ax.set_ylabel("Error")
-        plt.title("Error over Time")
+        ax.set_ylabel("Loss")
+        plt.title("Loss over Time")
         # saving?
         if should_show:
             plt.show()
@@ -584,15 +546,8 @@ class ArtificialNeuralNetwork():
         """
         Method to update the weights for convergence.
 
-        Parameters
-        ----------
-        prediction_element : list
-            List of different values, defines by the self.prediction_elements_tuple in the __init__ method.
-
-        Returns
-        -------
-        None
-            Updates the weights internally.
+        :param prediction_element: List of different values, defines by the self.prediction_elements_tuple in the __init__ method.
+        :type prediction_element: list
         """
         pass
 
@@ -601,17 +556,13 @@ class ArtificialNeuralNetwork():
         """
         Loss function to calculate the error of the neural network compared to the true value.
 
-        Parameters
-        ----------
-        y : np.array
-            Ground Truth values.
-        y_ : np.array
-            Predicted values.
+        :param y: Ground Truth values.
+        :type y: np.array
+        :param y_: Predicted values.
+        :type y_: np.array
 
-        Returns
-        -------
-        dict
-            Loss Values of the prediction.
+        :return: Loss Values of the prediction.
+        :rtype: dict
         """
         return {"Sum Prediction Loss": np.sum(y - y_)}
 
@@ -620,17 +571,13 @@ class ArtificialNeuralNetwork():
         """
         Evaluates the neural network on given testdata, to see the error made on this data.
 
-        Parameters
-        ----------
-        X : np.array
-            Input data.
-        y : np.array
-            Labeled Ground Truth data.
+        :param X: Input data.
+        :type X: np.array
+        :param y: Labeled Ground Truth data.
+        :type y: np.array
 
-        Returns
-        -------
-        float/int
-            The absolute error made on the testdata.
+        :return: The absolute error made on the testdata.
+        :rtype: float/int
         """
         absolute_error = 0
 
