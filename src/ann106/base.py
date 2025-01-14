@@ -43,6 +43,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from sklearn.preprocessing import MinMaxScaler
+
+from .learn_rate import LearnrateScheduler
+from .activation_functions import pass_through, step_function
 
 
 
@@ -243,9 +247,9 @@ class Layer():
         :param activation_func: Activation function for the layer.
         :type activation_func: callable or None
         """
-        self.weights = np.random.uniform(-1, 1, (output_size, input_size))
-        self.bias = np.random.uniform(-1, 1, (output_size,))
-        self.activation_func = activation_func if activation_func else lambda x: x 
+        self.weights = np.random.normal(0, 0.01, (output_size, input_size)) if output_size is not None and input_size is not None else None
+        self.bias = np.random.normal(0, 0.01, (output_size,)) if output_size is not None else None
+        self.activation_func = activation_func if activation_func is not None else pass_through # lambda x: x 
 
     def forward(self, X):
         """
@@ -257,21 +261,30 @@ class Layer():
         :return: Output of the layer after applying the activation function.
         :rtype: np.array
         """
-        z = np.dot(self.weights, X) + self.bias
+        if self.weights is not None:
+            z = np.dot(self.weights, X)
+        else:
+            z = X
+
+        if self.bias is not None:
+            z += self.bias
+
         return self.activation_func(z)
 
 
 
 class ArtificialNeuralNetwork():
-    def __init__(self):
+    def __init__(self, learn_rate_scheduler=None):
         self.layers = []
         self.name = "ANN"
+        self.learn_rate_scheduler = learn_rate_scheduler if learn_rate_scheduler is not None else LearnrateScheduler(start_learnrate=1.0)
 
         # choose which elments you want for your "update_weights" method
         self.prediction_elements_tuple = {
             "X": True,
             "y": False,
             "y_": False,
+            "all_y_": False,
             "error": True
         }
 
@@ -284,7 +297,7 @@ class ArtificialNeuralNetwork():
             "all-errors":[]
         }
 
-    def forward(self, X):
+    def forward(self, X, return_all_layer_outputs=False):
         """
         Forward pass through the entire network.
 
@@ -294,16 +307,22 @@ class ArtificialNeuralNetwork():
         :return: Final output of the network.
         :rtype: np.array
         """
+        all_outputs = []
         output = X
         for layer in self.layers:
             output = layer.forward(output)
-        return output
+            all_outputs += [output]
+        
+        if return_all_layer_outputs:
+            return all_outputs
+        else:
+            return output
 
     def train(self, X, y, epochs, batch_size=1, 
               parallel_computing=True, shuffle_data=True,
               print_ever_x_steps=10, save_model_every_x_epochs=2,
               log_path="./logs", model_save_path="./models", 
-              name=None):
+              name=None, learn_rate_scheduler=None, scaling=True):
         """
         Trains the artificial neural network (ANN) on the given data.
 
@@ -325,10 +344,25 @@ class ArtificialNeuralNetwork():
         :type model_save_path: str
         :param name: Name of the model / training. Decides the name of the logs and the model saving name. If None, the standard model name will be used.
         :type name: str
+        :param learn_rate_scheduler: Defines the degree of adjustment of the weights and the strategy to change this adjustment.
+        :type learn_rate_scheduler: LearnrateScheduler
+        :param scaling: Decides whether to scale input data or not
+        :type scaling: bool 
 
         :return: Updates ANN Model internally and also returns the model, for connected calls. 
         :rtype: ArtificialNeuralNetwork 
         """
+        if learn_rate_scheduler:
+            self.learn_rate_scheduler = learn_rate_scheduler
+        
+        # scale data
+        if scaling:
+            scaler = MinMaxScaler()
+            scaler = scaler.fit(X)
+            self.scaler = scaler
+            X = scaler.transform(X)
+        else:
+            self.scaler = None
 
         # Init
         last_time = time.time()
@@ -372,7 +406,11 @@ class ArtificialNeuralNetwork():
                     for cur_X, cur_y in zip(X_batch, y_batch):
 
                         # predict and calc error
-                        y_ = self.forward(cur_X)
+                        if self.prediction_elements_tuple["all_y_"]:
+                            all_y_ = self.forward(cur_X, return_all_layer_outputs=True)
+                            y_ = all_y_[-1]
+                        else:
+                            y_ = self.forward(cur_X) 
                         loss_dict = self.loss_function(cur_y, y_)    # loss
 
                         for cur_loss_name, cur_loss_value in loss_dict.items():
@@ -389,6 +427,8 @@ class ArtificialNeuralNetwork():
                             prediction_elments += [cur_y]
                         if self.prediction_elements_tuple["y_"]:
                             prediction_elments += [y_]
+                        if self.prediction_elements_tuple["all_y_"]:
+                            prediction_elments += [all_y_]
                         if self.prediction_elements_tuple["error"]:
                             prediction_elments += [loss_dict]
                         prediction_cache += [prediction_elments]
@@ -415,6 +455,7 @@ class ArtificialNeuralNetwork():
                 
                 # after every batch
                 cur_step += 1
+                self.learn_rate_scheduler.step()
 
             # add save check
             if cur_step > 0 and cur_step % save_model_every_x_epochs == 0:
@@ -435,6 +476,12 @@ class ArtificialNeuralNetwork():
         log(file_path=log_path, content=f"\n\nCongratulations!!!🥳\n🚀 Your model 🚀 waits here for you:\n      -> '{save_path}'", name=name)
 
         return self
+
+    def get_lr(self):
+        try:
+            return self.learn_rate_scheduler.learn_rate
+        except Exception:
+            return None
 
     def add_layer(self, input_size, output_size, activation_func=None):
         """
@@ -501,7 +548,7 @@ class ArtificialNeuralNetwork():
         except Exception as e:
             raise FileNotFoundError(f"An error occurred while loading the model: {e}")
 
-    def loss_plot(self, width=8, height=5, smoothing_size=1, should_show=True):
+    def loss_plot(self, width=8, height=5, smoothing_size=1, should_show=True, loss_name=None):
         """
         Plots the loss/error of the latest training.
 
@@ -513,6 +560,8 @@ class ArtificialNeuralNetwork():
         :type smoothing_size: int ( >= 1 and <= total steps)
         :param should_show: Defines whether to show the plot or not.
         :type should_show: bool
+        :param loss_name: To get the loss plot for one specific loss. If None, the losses get summed/stacked.
+        :type loss_name: str
         """
         end_times = self.train_history["end-time"]
         if len(end_times) <= 0:
@@ -526,17 +575,24 @@ class ArtificialNeuralNetwork():
             break
         total_loss = [0]*indexes
         for key, values in loss.items():
+            if loss_name is not None:
+                if key != loss_name:
+                    continue
             for i, value in enumerate(values):
                 total_loss[i] += value
 
         if smoothing_size > 1:
             total_loss = moving_average_sliding_window(total_loss, window_size=smoothing_size)
 
+        plot_name = "Total Loss"
+        if loss_name is not None:
+            plot_name = loss_name
+
         fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(width, height))
         ax.plot(np.arange(0, len(total_loss)), total_loss)
         ax.set_xlabel("Time Iterations")
         ax.set_ylabel("Loss")
-        plt.title("Loss over Time")
+        plt.title(f"{plot_name} over Time")
         # saving?
         if should_show:
             plt.show()
@@ -566,8 +622,32 @@ class ArtificialNeuralNetwork():
         """
         return {"Sum Prediction Loss": np.sum(y - y_)}
 
+    def scale(self, x):
+        try:
+            if self.scaler is None:
+                return x
+
+            x = self.scaler.transform(x.reshape(1, -1))
+            return np.squeeze(x)
+        except Exception as e:
+            # print(e)
+            return x
+
     # UPDATE ME
-    def eval(self, X, y):
+    def predict(self, x):
+        """
+        Method to inference an input. It makes the same as forward 
+        but most likely applies a function to come from likelihoods to
+        a clean result.
+
+        :param prediction_element: List of different values, defines by the self.prediction_elements_tuple in the __init__ method.
+        :type prediction_element: list
+        """
+        x = self.scale(x)
+        return self.forward(x)
+
+    # UPDATE ME
+    def eval(self, X, y, loss_func=np.abs, as_total_loss=True):
         """
         Evaluates the neural network on given testdata, to see the error made on this data.
 
@@ -575,16 +655,23 @@ class ArtificialNeuralNetwork():
         :type X: np.array
         :param y: Labeled Ground Truth data.
         :type y: np.array
+        :param loss_func: Loss metric to calc the error.
+        :type loss_func: callable
+        :param as_total_loss: Decides whether to return the total loss or an list with individual losses.
+        :type as_total_loss: bool
 
         :return: The absolute error made on the testdata.
         :rtype: float/int
         """
-        absolute_error = 0
+        error = []
 
         for i, x in enumerate(X):
-            absolute_error += np.abs(y[i] - self.forward(x))
+            error += [loss_func(y[i] - self.predict(x))]
 
-        return absolute_error
+        if as_total_loss:
+            return sum(error)
+        else:
+            return error
 
 
 

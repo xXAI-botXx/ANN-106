@@ -21,6 +21,9 @@ class ArtificialNeuralNetwork(BaseANN, BaseEstimator, ClassifierMixin):
 
     def predict(self):
         check_is_fitted(self, ['X_', 'y_'])
-        return self.forward(x)
+        return self.predict(x)
+
+    def predict(self, x):
+        return x
 
 

@@ -3,9 +3,11 @@
 import numpy as np
 
 from .base import ArtificialNeuralNetwork, Layer
-from .activation_functions import heaviside
+from .activation_functions import step_function
 from .loss_functions import sum_error, get_total_loss
 
+def heaviside(sum_value):
+    return step_function(sum_value, threshold=0.0, greater_equal_value=1.0, smaller_value=0.0)
 
 class Perceptron(ArtificialNeuralNetwork):
     def __init__(self):
@@ -14,6 +16,7 @@ class Perceptron(ArtificialNeuralNetwork):
             "X": True,
             "y": False,
             "y_": False,
+            "all_y_": False,
             "error": True
         }
         self.name = "Perceptron"
@@ -31,6 +34,9 @@ class Perceptron(ArtificialNeuralNetwork):
 
     def loss_function(self, y, y_):
         return {"Sum Loss": sum_error(y, y_)}
+
+    def predict(self, x):
+        return x
 
     def eval(self, X, y):
         absolute_error = 0
