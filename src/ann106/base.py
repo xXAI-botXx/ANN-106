@@ -357,10 +357,13 @@ class ArtificialNeuralNetwork():
         
         # scale data
         if scaling:
-            scaler = MinMaxScaler()
-            scaler = scaler.fit(X)
-            self.scaler = scaler
-            X = scaler.transform(X)
+            try:
+                if self.scaler is None:
+                    self.create_scaler(X)
+            except Exception:
+                self.create_scaler(X)
+
+            X = self.scaler.transform(X)
         else:
             self.scaler = None
 
@@ -597,6 +600,24 @@ class ArtificialNeuralNetwork():
         if should_show:
             plt.show()
 
+    def create_scaler(self, X):
+        scaler = MinMaxScaler()
+        scaler = scaler.fit(X)
+        self.scaler = scaler
+        self.min_scaler_value = np.min(X)
+        self.max_scaler_value = np.max(X)
+
+    def scale(self, x):
+        try:
+            if self.scaler is None:
+                return x
+
+            x = self.scaler.transform(x.reshape(1, -1))
+            return np.squeeze(x)
+        except Exception as e:
+            # print(e)
+            return x
+
     # UPDATE ME
     def update_weights(self, prediction_element):
         """
@@ -621,17 +642,6 @@ class ArtificialNeuralNetwork():
         :rtype: dict
         """
         return {"Sum Prediction Loss": np.sum(y - y_)}
-
-    def scale(self, x):
-        try:
-            if self.scaler is None:
-                return x
-
-            x = self.scaler.transform(x.reshape(1, -1))
-            return np.squeeze(x)
-        except Exception as e:
-            # print(e)
-            return x
 
     # UPDATE ME
     def predict(self, x):
