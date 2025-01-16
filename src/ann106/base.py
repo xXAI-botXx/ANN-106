@@ -47,6 +47,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 from .learn_rate import LearnrateScheduler
 from .activation_functions import pass_through, step_function
+from .loss_functions import sum_absolute_error
 
 
 
@@ -316,6 +317,8 @@ class ArtificialNeuralNetwork():
         if return_all_layer_outputs:
             return all_outputs
         else:
+            if np.isnan(output) or np.isinf(output):
+                print("Warning! Nan or Inf values detected. This may be caused through a too high learning rate.")
             return output
 
     def train(self, X, y, epochs, batch_size=1, 
@@ -618,6 +621,32 @@ class ArtificialNeuralNetwork():
             # print(e)
             return x
 
+    def eval(self, X, y, loss_func=sum_absolute_error, group_function=sum):
+        """
+        Evaluates the neural network on given testdata, to see the error made on this data.
+
+        :param X: Input data.
+        :type X: np.array
+        :param y: Labeled Ground Truth data.
+        :type y: np.array
+        :param loss_func: Loss metric to calc the error.
+        :type loss_func: callable
+        :param group_function: Decides how the single error values get put together. IF give a None, ithis method return an list with individual losses.
+        :type group_function: callable or None
+
+        :return: The absolute error made on the testdata.
+        :rtype: float/int
+        """
+        error = []
+
+        for i, x in enumerate(X):
+            error += [loss_func(y[i], self.predict(x))]
+
+        if group_function is not None:
+            return group_function(error)
+        else:
+            return error
+
     # UPDATE ME
     def update_weights(self, prediction_element):
         """
@@ -648,40 +677,13 @@ class ArtificialNeuralNetwork():
         """
         Method to inference an input. It makes the same as forward 
         but most likely applies a function to come from likelihoods to
-        a clean result.
+        a clean result -> Output Function.
 
         :param prediction_element: List of different values, defines by the self.prediction_elements_tuple in the __init__ method.
         :type prediction_element: list
         """
         x = self.scale(x)
         return self.forward(x)
-
-    # UPDATE ME
-    def eval(self, X, y, loss_func=np.abs, as_total_loss=True):
-        """
-        Evaluates the neural network on given testdata, to see the error made on this data.
-
-        :param X: Input data.
-        :type X: np.array
-        :param y: Labeled Ground Truth data.
-        :type y: np.array
-        :param loss_func: Loss metric to calc the error.
-        :type loss_func: callable
-        :param as_total_loss: Decides whether to return the total loss or an list with individual losses.
-        :type as_total_loss: bool
-
-        :return: The absolute error made on the testdata.
-        :rtype: float/int
-        """
-        error = []
-
-        for i, x in enumerate(X):
-            error += [loss_func(y[i] - self.predict(x))]
-
-        if as_total_loss:
-            return sum(error)
-        else:
-            return error
 
 
 
