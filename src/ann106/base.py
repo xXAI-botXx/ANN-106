@@ -2,8 +2,9 @@
 A simple Framework for artificial neural networks. With prints, logs and more.
 It is recommended to use PyTorch or TensorFlow for professional projects, this is just an educational and fun project.
 
-Features
---------
+
+:features:
+
 - Weight representation through layers (Layer class)
 - Customizable ANN
 - Multiple Loss functions
@@ -11,9 +12,11 @@ Features
 - Train History (Time, Errors)
 - Lossplotting
 - Added Batch-Size and general training loop
+- Plotting (as string and as graph)
 
-Planned Features
-----------------
+
+:planned-features:
+
 - Add backward -> learning
 - Add parallel processing (of batches)
     - Parallel(n_jobs=-1)(delayed(compute_square)(num) for num in numbers
@@ -22,6 +25,50 @@ Planned Features
 - Add validation data during training
 - Add Dataloader (?)
 - Add more networks -> CNN, ...
+
+
+:example:
+
+>>> class MyANN(ann.base.ArtificialNeuralNetwork):
+...    def __init__(self):
+...        super().__init__()
+...        self.prediction_elements_tuple = {
+...            "X": True,
+...            "y": True,
+...            "y_": False,
+...            "all_y_": True,
+...            "error": False
+...        }
+...        self.name = "MyANN"
+...        self.layers = [
+...                ann.base.Layer(2, 1, None), 
+...                    ]
+
+>>>    def update_weights(self, prediction_element):
+...        # extract needed elements
+...        cur_X, cur_y, cur_y_pred = prediction_element 
+...        cur_y_pred = cur_y_pred[0]
+...        cur_error = cur_y - cur_y_pred
+        
+...        delta_weights = self.get_lr() * cur_error * cur_X
+...        self.layers[0].weights = self.layers[0].weights+delta_weights
+
+...        self.layers[0].bias = self.layers[0].bias + self.get_lr() * cur_error
+
+>>>    def loss_function(self, y, y_):
+...        return {"Sum Loss":ann.loss_functions.sum_error(y, y_)} # y - y_
+
+>>>    def predict(self, x):
+...        x = self.scale(x)
+...        # return self.forward(x)
+...        return ann.activation_functions.step_function(self.forward(x), threshold=0.0, greater_equal_value=1, smaller_value=-1)
+
+>>> model = MyANN()
+>>> learn_rate_scheduler = ann.learn_rate.LearnrateScheduler(start_learnrate=0.005)
+>>> model.train(X=X, y=y, epochs=500, parallel_computing=False, print_ever_x_steps=1000, learn_rate_scheduler=learn_rate_scheduler)
+>>> model.eval(X=X, y=y)
+
+
 
 Author: Tobia Ippolito
 """
@@ -34,6 +81,8 @@ Author: Tobia Ippolito
 import sys
 import os
 import pickle
+import inspect
+from copy import deepcopy
 from datetime import datetime, timedelta
 import time
 
@@ -41,6 +90,7 @@ from IPython.display import clear_output
 
 import numpy as np
 import matplotlib.pyplot as plt
+import networkx as nx
 import pandas as pd
 
 from sklearn.preprocessing import MinMaxScaler
@@ -295,9 +345,12 @@ class ArtificialNeuralNetwork():
             "epochs":[],
             "total-steps":[],
             "batch-size":[],
-            "all-errors":[]
+            "all-errors":[],
+            "lr-scheduler":[],
+            "end-steps":[],
+            "end-epochs":[]
         }
-
+        
     def forward(self, X, return_all_layer_outputs=False):
         """
         Forward pass through the entire network.
@@ -387,96 +440,120 @@ class ArtificialNeuralNetwork():
         output_print = f"\n{'-'*24}\n{self.name} Training:\n    - Epochs: {epochs}\n    - Layers: {len(self.layers)}"
         log(content=output_print, file_path=log_path, reset_logs=True, should_log=True, should_print=True, name=name)
 
-        # Go through every datapoint X-times
-        for cur_epoch in range(epochs):
-            cur_iteration = 0
+        try:
+            # Go through every datapoint X-times
+            for cur_epoch in range(epochs):
+                cur_iteration = 0
 
-            # shuffle data
-            if shuffle_data:
-                permutation = np.random.permutation(len(X))
-                X_shuffled = X[permutation]
-                y_shuffled = y[permutation]
-            else:
-                X_shuffled = X
-                y_shuffled = y
-
-            # Process in batches
-            for i in range(0, n_samples, batch_size): 
-                X_batch = X_shuffled[i:i+batch_size]
-                y_batch = y_shuffled[i:i+batch_size]
-                prediction_cache = []
-
-                if parallel_computing:
-                    pass
+                # shuffle data
+                if shuffle_data:
+                    permutation = np.random.permutation(len(X))
+                    X_shuffled = X[permutation]
+                    y_shuffled = y[permutation]
                 else:
-                    for cur_X, cur_y in zip(X_batch, y_batch):
+                    X_shuffled = X
+                    y_shuffled = y
 
-                        # predict and calc error
-                        if self.prediction_elements_tuple["all_y_"]:
-                            all_y_ = self.forward(cur_X, return_all_layer_outputs=True)
-                            y_ = all_y_[-1]
-                        else:
-                            y_ = self.forward(cur_X) 
-                        loss_dict = self.loss_function(cur_y, y_)    # loss
+                # Process in batches
+                for i in range(0, n_samples, batch_size): 
+                    X_batch = X_shuffled[i:i+batch_size]
+                    y_batch = y_shuffled[i:i+batch_size]
+                    prediction_cache = []
 
-                        for cur_loss_name, cur_loss_value in loss_dict.items():
-                            if cur_loss_name in all_losses.keys():
-                                all_losses[cur_loss_name] += [float(cur_loss_value)]
-                            else:
-                                all_losses[cur_loss_name] = [float(cur_loss_value)]
-
-                        # how to customize prediction_elments
-                        prediction_elments = []
-                        if self.prediction_elements_tuple["X"]:
-                            prediction_elments += [cur_X]
-                        if self.prediction_elements_tuple["y"]:
-                            prediction_elments += [cur_y]
-                        if self.prediction_elements_tuple["y_"]:
-                            prediction_elments += [y_]
-                        if self.prediction_elements_tuple["all_y_"]:
-                            prediction_elments += [all_y_]
-                        if self.prediction_elements_tuple["error"]:
-                            prediction_elments += [loss_dict]
-                        prediction_cache += [prediction_elments]
-
-                # adjust weights
-                for cur_prediction_element in prediction_cache:
-                    self.update_weights(cur_prediction_element)
-
-                # log losses
-                for key, value in loss_dict.items():
-                    if key in losses.keys():
-                        losses[key] += [value]
+                    if parallel_computing:
+                        pass
                     else:
-                        losses[key] = [value]
-                cur_total_loss = sum([value for value in loss_dict.values()])
+                        for cur_X, cur_y in zip(X_batch, y_batch):
 
-                if cur_step > 0 and cur_step % print_ever_x_steps == 0:
-                    log_train(epochs, cur_epoch, max_steps, cur_step, n_samples, batch_size, times, losses, log_path, last_time, name)
+                            # predict and calc error
+                            if self.prediction_elements_tuple["all_y_"]:
+                                all_y_ = self.forward(cur_X, return_all_layer_outputs=True)
+                                y_ = all_y_[-1]
+                            else:
+                                y_ = self.forward(cur_X) 
+                            loss_dict = self.loss_function(cur_y, y_)    # loss
 
-                    # reset
-                    times = []
-                    losses = dict()
-                    last_time = time.time()
-                
-                # after every batch
-                cur_step += 1
-                self.learn_rate_scheduler.step()
+                            for cur_loss_name, cur_loss_value in loss_dict.items():
+                                if cur_loss_name in all_losses.keys():
+                                    all_losses[cur_loss_name] += [float(cur_loss_value)]
+                                else:
+                                    all_losses[cur_loss_name] = [float(cur_loss_value)]
 
-            # add save check
-            if cur_step > 0 and cur_step % save_model_every_x_epochs == 0:
-                self.save(save_path=model_save_path, name=name+f"_epoch_{cur_epoch}")
+                            # how to customize prediction_elments
+                            prediction_elments = []
+                            if self.prediction_elements_tuple["X"]:
+                                prediction_elments += [cur_X]
+                            if self.prediction_elements_tuple["y"]:
+                                prediction_elments += [cur_y]
+                            if self.prediction_elements_tuple["y_"]:
+                                prediction_elments += [y_]
+                            if self.prediction_elements_tuple["all_y_"]:
+                                prediction_elments += [all_y_]
+                            if self.prediction_elements_tuple["error"]:
+                                prediction_elments += [loss_dict]
+                            prediction_cache += [prediction_elments]
+
+                    # adjust weights
+                    for cur_prediction_element in prediction_cache:
+                        self.update_weights(cur_prediction_element)
+
+                    # log losses
+                    for key, value in loss_dict.items():
+                        if key in losses.keys():
+                            losses[key] += [value]
+                        else:
+                            losses[key] = [value]
+                    cur_total_loss = sum([value for value in loss_dict.values()])
+
+                    if cur_step > 0 and cur_step % print_ever_x_steps == 0:
+                        log_train(epochs, cur_epoch, max_steps, cur_step, n_samples, batch_size, times, losses, log_path, last_time, name)
+
+                        # reset
+                        times = []
+                        losses = dict()
+                        last_time = time.time()
+                    
+                    # after every batch
+                    cur_step += 1
+                    self.learn_rate_scheduler.step()
+
+                # add save check
+                if cur_step > 0 and cur_step % save_model_every_x_epochs == 0:
+                    self.save(save_path=model_save_path, name=name+f"_epoch_{cur_epoch}")
+        except KeyboardInterrupt:
+            log(content="Early Stop Initiated!", file_path=log_path, reset_logs=False, reset_output=True, should_log=True, should_print=True, name=name)
+
+            log_train(epochs, cur_epoch, max_steps, cur_step, n_samples, batch_size, times, losses, log_path, last_time, name)
+            end_time = get_cur_time_str()
+
+            self.train_history["start-time"] += [start_time]
+            self.train_history["end-time"] += [end_time]
+            self.train_history["epochs"] += [epochs]
+            self.train_history["total-steps"] += [max_steps]
+            self.train_history["batch-size"] += [batch_size]
+            self.train_history["all-errors"] += [all_losses]
+            self.train_history["lr-scheduler"] += [self.learn_rate_scheduler]
+            self.train_history["end-steps"] += [cur_step]
+            self.train_history["end-epochs"] += [cur_epoch]
+
+            save_path = self.save(save_path=model_save_path, name=name)
+            log(file_path=log_path, content=f"\n\n🚀 Your model 🚀 waits here for you:\n      -> '{save_path}'", name=name)
+
         
+
         # after training
         log_train(epochs, cur_epoch, max_steps, cur_step, n_samples, batch_size, times, losses, log_path, last_time, name)
         end_time = get_cur_time_str()
 
         self.train_history["start-time"] += [start_time]
         self.train_history["end-time"] += [end_time]
-        self.train_history["epochs"] += [cur_epoch]
-        self.train_history["total-steps"] += [cur_step]
+        self.train_history["epochs"] += [epochs]
+        self.train_history["total-steps"] += [max_steps]
         self.train_history["batch-size"] += [batch_size]
         self.train_history["all-errors"] += [all_losses]
+        self.train_history["lr-scheduler"] += [self.learn_rate_scheduler]
+        self.train_history["end-steps"] += [cur_step]
+        self.train_history["end-epochs"] += [cur_epoch]
 
         save_path = self.save(save_path=model_save_path, name=name)
         log(file_path=log_path, content=f"\n\nCongratulations!!!🥳\n🚀 Your model 🚀 waits here for you:\n      -> '{save_path}'", name=name)
@@ -602,6 +679,131 @@ class ArtificialNeuralNetwork():
         # saving?
         if should_show:
             plt.show()
+
+    def __str__(self):
+        """
+        Returns the architecture of the neural network
+        as well as the Output Function, the Loss Function and the Update Weights Function.
+        
+        :return: The architecture as string.
+        :rtype: str
+
+        :example:
+
+        ################################################################
+
+        MLP - Architecture:
+        --------------------------------
+        Input: 2, Output: 2, Activation: pass_through
+        --------------------------------
+        Input: 2, Output: 1, Activation: pass_through
+        --------------------------------
+        Output Function:
+            def predict(self, x):
+                x = self.scale(x)
+                # return self.forward(x)
+                return ann.activation_functions.step_function(self.forward(x), threshold=0.0, greater_equal_value=1, smaller_value=-1)
+
+
+        Loss Function:
+            def loss_function(self, y, y_):
+                return {"Sum Loss":ann.loss_functions.sum_error(y, y_)} # y - y_
+
+
+        Update Weights Function:
+            def update_weights(self, prediction_element):
+                # extract needed elements
+                cur_X, cur_y, cur_y_pred = prediction_element 
+                cur_y_pred = cur_y_pred[0]
+                cur_error = cur_y - cur_y_pred
+                
+                delta_weights = self.get_lr() * cur_error * cur_X
+                self.layers[0].weights = self.layers[0].weights+delta_weights
+
+                self.layers[0].bias = self.layers[0].bias + self.get_lr() * cur_error
+
+
+        ################################################################
+
+        """
+        ann_str = f"\n{'#'*64}\n\n"
+        ann_str += f"{self.name} - Architecture:"
+        ann_str += self.get_architecture()
+        ann_str += f"\n{'-'*32}\nOutput Function:\n{inspect.getsource(self.predict)}"
+
+        ann_str += f"\n\nLoss Function:\n{inspect.getsource(self.loss_function)}"
+
+        ann_str += f"\n\nUpdate Weights Function:\n{inspect.getsource(self.update_weights)}"
+
+        ann_str += f"\n\n{'#'*64}"
+        return ann_str
+
+    def get_architecture(self):
+        """
+        Returns only the layers/architecture of the ANN.
+
+        :return: Layers of ANN.
+        :rtype: str
+        """
+        ann_str = ""
+        for layer in self.layers:
+            ann_str += f"\n{'-'*32}\nInput: {layer.weights.shape[1]}, Output: {layer.weights.shape[0]}, Activation: {layer.activation_func.__name__}"
+        return ann_str
+
+    def to_graph(self):
+        """
+        Transforms the Neural Network into an Graph.
+
+        :return: The nodes, edges and the position of every node.
+        :rtype: tuple(list(int), list(tuple(int, int)), dict(int: tuple(int, int)))
+        """
+        nodes = []
+        edges = []
+        pos = []
+        index = 0
+        last_nodes = None
+        for layer in self.layers:
+            if len(nodes) == 0:
+                nodes += np.arange(0, layer.weights.shape[1]).tolist()
+                index = layer.weights.shape[1]
+                last_nodes = deepcopy(nodes)
+                pos += list(zip(np.zeros(layer.weights.shape[1]).tolist(), np.arange(0, layer.weights.shape[1]).tolist()))
+
+            new_layer = np.arange(index, layer.weights.shape[0]+index).tolist()
+            nodes += new_layer
+
+            # print("\n\nNew Edges:\n")
+            # print("Index:", index, " last_nodes:", last_nodes, " cur_nodes:", new_layer, "\n")
+            for cur_last_node in last_nodes:
+                for cur_node in new_layer:
+                    # print(cur_last_node, cur_node)
+                    edges += [(cur_last_node, cur_node)]
+
+            pos += list(zip((np.ones(layer.weights.shape[0])*index).tolist(), np.arange(0, layer.weights.shape[0]).tolist()))
+            
+            index = new_layer[-1]+1
+            last_nodes = deepcopy(new_layer)
+
+        # Adjust positions -> transform to dict
+        pos_dict = dict()
+        for i, cur_node in enumerate(nodes):
+            pos_dict[cur_node] = pos[i]
+
+        return nodes, edges, pos_dict
+
+    # works currently only for fully connected
+    def plot_architecture(self):
+        # Get neurons/nodes and weights/edges
+        nodes, edges, pos_dict = self.to_graph()
+
+        # Create directed Graph with nodes and edges
+        graph = nx.DiGraph()
+        graph.add_nodes_from(nodes)
+        graph.add_edges_from(edges)
+
+        # Plot graph
+        nx.draw(graph, pos_dict, with_labels=True, node_color='lightblue', edge_color='gray', node_size=2000, font_size=15)
+        plt.show()
 
     def create_scaler(self, X):
         scaler = MinMaxScaler()

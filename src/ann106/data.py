@@ -100,7 +100,10 @@ def data_generator_binary_classification(
     if plotting:
         colors = ["#ff7f0e" if cur_y == 1 else "#1f77b4" for cur_y in y]
 
-        style_name = np.random.choice(plt.style.available)
+        if plot_style:
+            style_name = plot_style
+        else:
+            style_name = np.random.choice(plt.style.available)
         print(f"Matplotlib Style: {style_name}")
         plt.style.use(style_name)  # Other options: 'ggplot', 'fivethirtyeight', 'bmh', 'dark_background'
         fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(8, 5))
