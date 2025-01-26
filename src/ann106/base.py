@@ -8,23 +8,10 @@ It is recommended to use PyTorch or TensorFlow for professional projects, this i
 - Weight representation through layers (Layer class)
 - Customizable ANN
 - Multiple Loss functions
-- Sklearn Version
 - Train History (Time, Errors)
 - Lossplotting
 - Added Batch-Size and general training loop
 - Plotting (as string and as graph)
-
-
-:planned-features:
-
-- Add backward -> learning
-- Add parallel processing (of batches)
-    - Parallel(n_jobs=-1)(delayed(compute_square)(num) for num in numbers
-- Add more Document Strings -> see: https://github.com/xXAI-botXx/Project-Helper/blob/main/guides/Sphinx_Helper.md#How-you-should-code
-- Add GPU calculation
-- Add validation data during training
-- Add Dataloader (?)
-- Add more networks -> CNN, ...
 
 
 :example:
@@ -97,7 +84,9 @@ from sklearn.preprocessing import MinMaxScaler
 
 from .learn_rate import LearnrateScheduler
 from .activation_functions import pass_through, step_function
-from .loss_functions import sum_absolute_error
+from .loss_functions import sum_absolute_error, NUMPY_VERSION
+from .numpy_utils import numpy_function_retriever as nfr
+from .data import DataTensor
 
 
 
@@ -298,8 +287,12 @@ class Layer():
         :param activation_func: Activation function for the layer.
         :type activation_func: callable or None
         """
-        self.weights = np.random.normal(0, 0.01, (output_size, input_size)) if output_size is not None and input_size is not None else None
-        self.bias = np.random.normal(0, 0.01, (output_size,)) if output_size is not None else None
+        weights_array = np.random.normal(0, 0.01, (output_size, input_size)) if output_size is not None and input_size is not None else None
+        self.weights = DataTensor().import_data(weights_array)
+        
+        bias = np.random.normal(0, 0.01, (output_size,)) if output_size is not None else None
+        self.bias = DataTensor().import_data(bias)
+
         self.activation_func = activation_func if activation_func is not None else pass_through # lambda x: x 
 
     def forward(self, X):
@@ -313,21 +306,26 @@ class Layer():
         :rtype: np.array
         """
         if self.weights is not None:
-            z = np.dot(self.weights, X)
+            # z = np.dot(self.weights, X)
+            z = nfr("dot", list_params=[self.weights.get(), X], numpy_version=self.weights.get_numpy_version())
         else:
             z = X
 
         if self.bias is not None:
-            z += self.bias
+            z += self.bias.get()
 
         return self.activation_func(z)
+
+    def backward(self, X, y):
+        pass
 
 
 
 class ArtificialNeuralNetwork():
-    def __init__(self, learn_rate_scheduler=None):
+    def __init__(self, learn_rate_scheduler=None, gradient_method=NUMPY_VERSION.AUTOGRAD):
         self.layers = []
         self.name = "ANN"
+        self.gradient_method = gradient_method
         self.learn_rate_scheduler = learn_rate_scheduler if learn_rate_scheduler is not None else LearnrateScheduler(start_learnrate=1.0)
 
         # choose which elments you want for your "update_weights" method
@@ -373,6 +371,9 @@ class ArtificialNeuralNetwork():
             if np.isnan(output) or np.isinf(output):
                 print("Warning! Nan or Inf values detected. This may be caused through a too high learning rate.")
             return output
+
+    def backward(self, X, y):
+        pass
 
     def train(self, X, y, epochs, batch_size=1, 
               parallel_computing=True, shuffle_data=True,
@@ -848,6 +849,9 @@ class ArtificialNeuralNetwork():
             return group_function(error)
         else:
             return error
+
+    def __call__(self, x):
+        return self.predict(x)
 
     # UPDATE ME
     def update_weights(self, prediction_element):

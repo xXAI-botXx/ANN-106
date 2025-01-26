@@ -2,14 +2,179 @@
 This file is handling data, preparing it, importing it and generating it.
 """
 
+import pickle
+from enum import Enum
+from typing import Union, List, Any
+
 import numpy as np
+import cupy as cp
 import matplotlib.pyplot as plt
 
-
-def gradient_func(func, x_values):
-    return np.array([derivative(func, x, dx=1e-5) for x in x_values]).reshape(-1, 1)
+from .numpy_utils import NUMPY_VERSION
 
 
+class COMPUTING_DEVICE(Enum):
+    CPU = np
+    GPU = cp
+    # ...?
+
+# also different GPU methods? Only CuPy?
+
+class DataTensor():
+    def __init__(self, computing_device:COMPUTING_DEVICE=COMPUTING_DEVICE.CPU):
+        """
+        Initialize the DataTensor class. Starts with an empty tensor.
+
+        :param computing_device: The device to use (CPU or GPU).
+        :type computing_device: COMPUTING_DEVICE
+        """
+        self.device = computing_device
+        self.history = []  # Stores history of changes or operations
+        self.data = None   # Stores the data (numpy or cupy array)
+
+    def add_history(self, operation:str, *list_args, **dict_args):
+        """
+        Adds an operation performed on the data to the history.
+        """
+        self.history.append({"operation":operation, "args":list_args, "named_args":dict_args})
+
+    def get(self):
+        """
+        Returns a copy of the data (numpy or cupy array).
+        """
+        return self.data.copy()
+
+    def send_to(self, target_device: COMPUTING_DEVICE):
+        """
+        Send data to the specified computing device (CPU or GPU or ...?).
+        """
+        if self.device == target_device:
+            return
+
+        if target_device == COMPUTING_DEVICE.CPU:
+            self.data = cp.asnumpy(self.data)
+        elif target_device == COMPUTING_DEVICE.GPU:
+            self.data = cp.asarray(self.data)
+        else:
+            raise ValueError(f"Unknown target device: {target_device}")
+
+        self.device = target_device
+        self.save_history("send_to", target_device)
+
+        return self
+
+    def import_data(self, source: Union[np.ndarray, cp.ndarray]):
+        """
+        Imports data from a existing numpy or cupy array.
+        """
+        if isinstance(source, np.ndarray):
+            if self.device == COMPUTING_DEVICE.GPU:
+                self.data = cp.asarray(source)
+            else:
+                self.data = source
+        elif isinstance(source, cp.ndarray):
+            if self.device == COMPUTING_DEVICE.CPU:
+                self.data = cp.asnumpy(source)
+            else:
+                self.data = source
+        else:
+            raise TypeError("Source must be a numpy or cupy array.")
+
+        self.save_history("import_data", type(source))
+
+        return self
+
+    def get_numpy_version(self):
+        if isinstance(self.data, np.ndarray):
+            return NUMPY_VERSION.NUMPY
+        elif isinstance(self.data, cp.ndarray):
+            return NUMPY_VERSION.CUPY
+        else:
+            raise ValueError("Your data is empty! Can't extract the numpy version from empty data.")
+
+    # def apply_numpy_function(self, func_name:str, list_params:list=None, dict_params:dict=None):
+    #     numpy_lib = self.device.value
+    #     try:
+    #         func = getattr(numpy_lib, func_name)  # Dynamically get the function
+    #     except AttributeError:
+    #         raise ValueError(f"The function '{func_name}' does not exist in {numpy_lib.__name__}.")
+
+    #     # Call the function with the provided list and dict parameters
+    #     if list_params and dict_params:
+    #         return func(*list_params, **dict_params)
+    #     elif list_params and not dict_params:
+    #         return func(*list_params)
+    #     elif not list_params and dict_params:
+    #         return func(*dict_params)
+    #     elif not list_params and not dict_params:
+    #         return func()
+
+    # adding saving and loading of Data objects?
+
+    # data saving
+    def save_numpy_array(self, file_path: str):
+        """Save the current data to a file."""
+        if self.data is None:
+            raise ValueError("No data to save.")
+
+        if self.device == COMPUTING_DEVICE.GPU:
+            np.save(file_path, cp.asnumpy(self.data))
+        else:
+            np.save(file_path, self.data)
+        self.save_history("save_to_file", file_path)
+    # add more saving options
+
+    # data loading -> images, data tables, text, audio, ..?
+    def load_numpy_array(self, file_path: str):
+        """
+        Loads a numpy array as data from a file.
+        """
+        self.data = np.load(file_path)
+        if self.device == COMPUTING_DEVICE.GPU:
+            self.data = cp.asarray(self.data)
+        self.save_history("load_from_file", file_path)
+
+        return self
+
+    # add more loading options!
+
+    def clear_data(self):
+        """
+        Clear the current data obj and reset history.
+        """
+        self.data = None
+        self.add_history("clear_data")
+
+    # data generation functions -> n dim, float? -> for different tasks?
+    def generate_data(self, shape: tuple, value: float = 0.0):
+        """Generate data with a specified shape and fill it with a value."""
+        if self.device == COMPUTING_DEVICE.CPU:
+            self.data = np.full(shape, value, dtype=np.float32)
+        elif self.device == COMPUTING_DEVICE.GPU:
+            self.data = cp.full(shape, value, dtype=cp.float32)
+        self.save_history("generate_data", shape, value)
+
+        return self
+    
+    # ...
+
+    # data checks
+    def check_data(self) -> str:
+        """
+        Check and return the status of the current data.
+
+        -> add more information?
+        """
+        if self.data is None:
+            return "No data loaded."
+        return f"Data loaded on {self.device.value} with shape {self.data.shape}"
+
+
+# def gradient_func(func, x_values):
+#     return np.array([derivative(func, x, dx=1e-5) for x in x_values]).reshape(-1, 1)
+
+
+# Integrate to the data class?
 def data_generator_binary_classification(
                             x_value_range_class_1=(-8, 8), y_value_range_class_1=(1, 5), 
                             x_value_range_class_2=(-8, 8), y_value_range_class_2=(-5, -1), 
