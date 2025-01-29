@@ -13,6 +13,7 @@ from .base import ArtificialNeuralNetwork
 ### Tools ###
 #############
 
+# -> probably now in loss-function!!!
 def build_gradient(func:callable):
     """
     Builds
@@ -49,7 +50,7 @@ def simple_weights_update(network:ArtificialNeuralNetwork, prediction_element):
 
         network.layers[0].bias = network.layers[0].bias + network.get_lr() * cur_error
 
-def backpropagation():
+def backpropagation(network:ArtificialNeuralNetwork, prediction_element):
     """
     The backpropagation algorithm tries to find a weight build with the gradient of 0,
     which is the global or local minima of the loss-function.
@@ -59,12 +60,12 @@ def backpropagation():
     Gradients are showed with the nabla sign.
 
     Process:
-    1. Start at a random weight
+    1. Start at a random weight -> already happened at the neginning of a network
     2. Calculate the negative gradient of this point -> the negative gradient points at the local or global minima
     3. Adjust the Weight to go in this direction with a given stepsize -> learning rate -> how?
     4. Repeat step 2 and 3 until the negative gradient of the loss function is 0 (or it is near by the solution, or max steps are over)
     """
+    # loss_gradient = network.
     pass
-
 
 

@@ -295,6 +295,9 @@ class Layer():
 
         self.activation_func = activation_func if activation_func is not None else pass_through # lambda x: x 
 
+        self.cached_input = None
+        self.cached_output = None
+
     def forward(self, X):
         """
         Forward pass through the layer.
@@ -317,7 +320,32 @@ class Layer():
         return self.activation_func(z)
 
     def backward(self, X, y):
-        pass
+        """
+        Backward pass through the layer.
+
+        :param d_output: Gradient of the loss with respect to the output of the layer.
+        :type d_output: np.array
+
+        :return: Gradient of the loss with respect to the input of the layer.
+        :rtype: np.array
+        """
+        # Compute gradient w.r.t. pre-activation output z
+        d_z = d_output * self.activation_derivative(self.cached_output)
+
+        # Gradient w.r.t weights
+        d_weights = np.dot(d_z, self.cached_input.T)
+
+        # Gradient w.r.t bias
+        d_bias = np.sum(d_z, axis=1, keepdims=True)
+
+        # Gradient w.r.t input
+        d_input = np.dot(self.weights.get().T, d_z)
+
+        # Update weights and biases (if using gradient descent)
+        # self.weights -= learning_rate * d_weights
+        # self.bias -= learning_rate * d_bias
+
+        return d_input
 
 
 
@@ -856,7 +884,7 @@ class ArtificialNeuralNetwork():
     # UPDATE ME
     def update_weights(self, prediction_element):
         """
-        Method to update the weights for convergence.
+        Method to update the weights and biases for convergence.
 
         :param prediction_element: List of different values, defines by the self.prediction_elements_tuple in the __init__ method.
         :type prediction_element: list
